@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>יתרת חוב מישאל ואורית וויס</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600&display=swap');
+        body {
+            font-family: 'Assistant', sans-serif;
+            background-color: #f0f4f8;
+            direction: rtl;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            margin: 20px;
+            box-sizing: border-box;
+        }
+        h1, h2, h3 {
+            text-align: center;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin-bottom: 30px;
+        }
+        .field {
+            margin-bottom: 15px;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555555;
+            font-weight: bold;
+        }
+        input[type="number"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #cccccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            width: 100%;
+            height: 60px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e6f7ff;
+            border-radius: 5px;
+            border: 1px solid #cce7ff;
+        }
+        .result p {
+            margin: 5px 0;
+            color: #555555;
+        }
+        .field-group {
+            display: flex;
+            justify-content: space-between;
+        }
+        @media (max-width: 600px) {
+            .field-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script>
+        // הגדרות Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyB8z5tkzAvRoJrqfFCIeE3rZxoG4J5C6sw",
+            authDomain: "weiss-e79c1.firebaseapp.com",
+            projectId: "weiss-e79c1",
+            storageBucket: "weiss-e79c1.appspot.com",
+            messagingSenderId: "773400382637",
+            appId: "1:773400382637:web:f2b942af4c9efda9b74a24",
+            measurementId: "G-7FZ023XZ7E"
+        };
+
+        // אתחול Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let originalDebt = 81182;
+        let currentDate = new Date();
+        let currentMonth = currentDate.getMonth() + 1; // חודשים מ-1 עד 12
+        let currentYear = currentDate.getFullYear();
+        let dayOfMonth = currentDate.getDate();
+
+        // טוען את הנתונים מהדאטהבייס
+        firebase.database().ref('payments').once('value').then(snapshot => {
+            let paymentsData = snapshot.val() || {};
+            let monthlyPayments = paymentsData.monthlyPayments || [];
+            let monthlyNotes = paymentsData.monthlyNotes || [];
+            if (dayOfMonth >= 20 && monthlyPayments.length === 0) {
+                monthlyPayments.push(1000); // התשלום הראשון נכנס
+                monthlyNotes.push("");
+                saveData(monthlyPayments, monthlyNotes);
+            }
+            updateMonths(monthlyPayments);
+            updateDetails(monthlyPayments, monthlyNotes);
+        });
+
+        function formatNumber(number) {
+            return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function updateMonths(monthlyPayments) {
+            let monthsSelect = document.getElementById('months');
+            monthsSelect.innerHTML = '';
+            for (let i = 1; i <= monthlyPayments.length; i++) {
+                let option = document.createElement('option');
+                let month = (currentMonth - i + 1) % 12 || 12;
+                let year = currentYear + Math.floor((currentMonth - i + 1) / 12);
+                option.value = i - 1;
+                option.text = `${month}/${year}`;
+                monthsSelect.add(option);
+            }
+            monthsSelect.value = monthlyPayments.length - 1;
+        }
+
+        function updateDetails(monthlyPayments, monthlyNotes) {
+            let selectedMonth = parseInt(document.getElementById('months').value);
+            let totalPaid = monthlyPayments.reduce((a, b) => a + b, 0);
+            let remainingDebt = originalDebt - totalPaid;
+            document.getElementById('totalPaid').textContent = formatNumber(totalPaid);
+            document.getElementById('remainingDebt').textContent = formatNumber(remainingDebt);
+            document.getElementById('monthlyDetail').textContent = formatNumber(monthlyPayments[selectedMonth]);
+            document.getElementById('selectedMonth').textContent = document.getElementById('months').options[selectedMonth].text;
+            document.getElementById('monthlyNotes').value = monthlyNotes[selectedMonth] || "";
+
+            // שמירת נתונים ב-Firebase בעת שינוי
+            document.getElementById('monthlyPayment').addEventListener('input', (event) => {
+                let newPayment = parseInt(event.target.value);
+                if (monthlyPayments.length > 0) {
+                    monthlyPayments[monthlyPayments.length - 1] = newPayment;
+                    saveData(monthlyPayments, monthlyNotes);
+                    updateDetails(monthlyPayments, monthlyNotes);
+                }
+            });
+
+            document.getElementById('monthlyNotes').addEventListener('input', (event) => {
+                monthlyNotes[selectedMonth] = event.target.value;
+                saveData(monthlyPayments, monthlyNotes);
+            });
+        }
+
+        function saveData(monthlyPayments, monthlyNotes) {
+            firebase.database().ref('payments').set({
+                monthlyPayments: monthlyPayments,
+                monthlyNotes: monthlyNotes
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>יתרת חוב מישאל ואורית וויס</h1>
+        <div class="field" style="margin-bottom: 30px;">
+            <label>סכום החוב המקורי:</label>
+            <p id="originalDebtDisplay">81,182 ₪</p>
+        </div>
+        <div class="field-group">
+            <div class="field">
+                <label for="months">בחר חודש:</label>
+                <select id="months" onchange="updateDetails()">
+                    <!-- יתווספו אופציות דינמית כאן -->
+                </select>
+            </div>
+            <div class="field">
+                <label for="monthlyPayment">סכום חודשי שהועבר:</label>
+                <input type="number" id="monthlyPayment" value="1000">
+            </div>
+        </div>
+        <div class="result">
+            <h2>פרטי התשלום</h2>
+            <div>
+                <p>סכום ששולם עד כה: <span id="totalPaid">0</span> ₪</p>
+                <p>יתרת חוב: <span id="remainingDebt">81,182</span> ₪</p>
+            </div>
+        </div>
+        <div class="result">
+            <h3>פירוט לחודש <span id="selectedMonth">--</span></h3>
+            <p>סכום: <span id="monthlyDetail">0</span> ₪</p>
+            <p>הערות:</p>
+            <textarea id="monthlyNotes" placeholder="הכנס הערות..."></textarea>
+        </div>
+    </div>
+</body>
+</html>
